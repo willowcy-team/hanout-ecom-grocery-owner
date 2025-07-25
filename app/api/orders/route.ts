@@ -1,16 +1,48 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { supabase } from "@/lib/supabase"
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const { data: orders, error } = await supabase.from("orders").select("*").order("created_at", { ascending: false })
+    const url = new URL(request.url)
+    const page = parseInt(url.searchParams.get('page') || '1')
+    const limit = parseInt(url.searchParams.get('limit') || '20')
+    const offset = (page - 1) * limit
+
+    // Get total count for pagination info
+    const { count: totalCount, error: countError } = await supabase
+      .from("orders")
+      .select("*", { count: 'exact', head: true })
+
+    if (countError) {
+      console.error("Error counting orders:", countError)
+      return NextResponse.json({ error: "Failed to count orders" }, { status: 500 })
+    }
+
+    // Get paginated orders
+    const { data: orders, error } = await supabase
+      .from("orders")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .range(offset, offset + limit - 1)
 
     if (error) {
       console.error("Error fetching orders:", error)
       return NextResponse.json({ error: "Failed to fetch orders" }, { status: 500 })
     }
 
-    return NextResponse.json(orders)
+    const totalPages = Math.ceil((totalCount || 0) / limit)
+
+    return NextResponse.json({
+      orders,
+      pagination: {
+        page,
+        limit,
+        totalCount,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1
+      }
+    })
   } catch (error) {
     console.error("Error in orders API:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

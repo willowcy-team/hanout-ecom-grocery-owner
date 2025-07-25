@@ -7,6 +7,14 @@ import type { Order } from '@/lib/supabase'
 interface OrdersContextType {
   orders: Order[]
   loading: boolean
+  pagination: {
+    page: number
+    limit: number
+    totalCount: number
+    totalPages: number
+    hasNextPage: boolean
+    hasPreviousPage: boolean
+  }
   isConnected: boolean
   connectionStatus: 'connecting' | 'connected' | 'disconnected' | 'error'
   reconnectAttempts: number
@@ -18,6 +26,8 @@ interface OrdersContextType {
   setOrders: React.Dispatch<React.SetStateAction<Order[]>>
   newOrderIds: Set<string>
   markOrderAsSeen: (orderId: string) => void
+  goToPage: (page: number) => void
+  changeItemsPerPage: (limit: number) => void
 }
 
 const OrdersContext = createContext<OrdersContextType | undefined>(undefined)
@@ -30,6 +40,7 @@ export function OrdersProvider({ children }: OrdersProviderProps) {
   const { 
     orders, 
     loading, 
+    pagination,
     isConnected,
     connectionStatus,
     reconnectAttempts,
@@ -37,7 +48,9 @@ export function OrdersProvider({ children }: OrdersProviderProps) {
     lastHeartbeat,
     refreshOrders,
     manualReconnect,
-    setOrders 
+    setOrders,
+    goToPage,
+    changeItemsPerPage
   } = useOrdersRealtimeListEnhanced()
 
   // Track new orders that haven't been "seen" yet
@@ -86,6 +99,7 @@ export function OrdersProvider({ children }: OrdersProviderProps) {
   const value: OrdersContextType = {
     orders,
     loading,
+    pagination,
     isConnected,
     connectionStatus,
     reconnectAttempts,
@@ -97,6 +111,8 @@ export function OrdersProvider({ children }: OrdersProviderProps) {
     setOrders,
     newOrderIds,
     markOrderAsSeen,
+    goToPage,
+    changeItemsPerPage,
   }
 
   return (

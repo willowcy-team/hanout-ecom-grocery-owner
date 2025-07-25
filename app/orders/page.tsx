@@ -54,6 +54,7 @@ import { OrderItemsDisplay } from "@/components/ui/order-items-display";
 import { OrderStatusBadge } from "@/components/ui/order-status-badge";
 import { OrderDateDisplay } from "@/components/ui/order-date-display";
 import { OrderActions } from "@/components/ui/order-actions";
+import { OrdersPagination } from "@/components/ui/orders-pagination";
 import type { Order } from "@/lib/supabase";
 
 type SortField = "created_at" | "total" | "status" | "customer_phone";
@@ -63,6 +64,7 @@ export default function OrdersPage() {
   const { 
     orders, 
     loading, 
+    pagination,
     isConnected, 
     connectionStatus,
     reconnectAttempts,
@@ -72,7 +74,9 @@ export default function OrdersPage() {
     manualReconnect,
     setOrders,
     newOrderIds,
-    markOrderAsSeen
+    markOrderAsSeen,
+    goToPage,
+    changeItemsPerPage
   } = useOrders();
   
   // State for filtering and sorting
@@ -165,18 +169,23 @@ export default function OrdersPage() {
     });
   }, [orders, searchTerm, statusFilter, sortField, sortDirection, selectedDateRange]);
 
-  // Calculate statistics
+  // Calculate statistics (use current page data for approximation)
   const getOrderStats = () => {
+    // Ensure orders is always an array
+    const ordersArray = Array.isArray(orders) ? orders : [];
+    
+    // For paginated data, we'll show stats based on current page
+    // In a real app, you might want to fetch separate stats from API
     const stats = {
-      total: orders.length,
-      pending: orders.filter(o => o.status === "pending").length,
-      inProgress: orders.filter(o => o.status === "in-progress").length,
-      completed: orders.filter(o => o.status === "completed").length,
-      cancelled: orders.filter(o => o.status === "cancelled").length,
-      totalRevenue: orders
+      total: pagination.totalCount, // Use total count from pagination
+      pending: ordersArray.filter(o => o.status === "pending").length,
+      inProgress: ordersArray.filter(o => o.status === "in-progress").length,
+      completed: ordersArray.filter(o => o.status === "completed").length,
+      cancelled: ordersArray.filter(o => o.status === "cancelled").length,
+      totalRevenue: ordersArray
         .filter(o => o.status === "completed")
         .reduce((sum, order) => sum + order.total, 0),
-      todayOrders: orders.filter(order => {
+      todayOrders: ordersArray.filter(order => {
         const today = new Date();
         const orderDate = new Date(order.created_at);
         return orderDate.toDateString() === today.toDateString();
@@ -459,7 +468,7 @@ export default function OrdersPage() {
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center">
               <ShoppingCart className="h-5 w-5 mr-2 text-orange-600" />
-              Orders ({filteredAndSortedOrders.length})
+              Orders ({pagination.totalCount})
             </CardTitle>
             {newOrderIds.size > 0 && (
               <Badge className="bg-orange-600 text-white animate-pulse">
@@ -469,14 +478,18 @@ export default function OrdersPage() {
           </div>
         </CardHeader>
         <CardContent>
-          {filteredAndSortedOrders.length === 0 ? (
+          {!Array.isArray(orders) || orders.length === 0 ? (
             <div className="text-center py-12">
               <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
                 <ShoppingCart className="h-8 w-8 text-gray-400" />
               </div>
-              <p className="text-gray-500 mb-2">No orders found</p>
+              <p className="text-gray-500 mb-2">
+                {!Array.isArray(orders) ? "Loading orders..." : "No orders found"}
+              </p>
               <p className="text-sm text-gray-400">
-                {searchTerm || statusFilter !== "all" || selectedDateRange !== "all"
+                {!Array.isArray(orders) 
+                  ? "Please wait while we fetch your orders"
+                  : searchTerm || statusFilter !== "all" || selectedDateRange !== "all"
                   ? "Try adjusting your filters"
                   : "Orders will appear here when customers place them"
                 }
@@ -537,7 +550,7 @@ export default function OrdersPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredAndSortedOrders.map((order) => {
+                  {orders.map((order) => {
                     const isNewOrder = newOrderIds.has(order.id);
                     
                     return (
@@ -644,6 +657,17 @@ export default function OrdersPage() {
               </Table>
             </div>
           )}
+          
+          {/* Pagination */}
+          <OrdersPagination
+            currentPage={pagination.page}
+            totalPages={pagination.totalPages}
+            totalCount={pagination.totalCount}
+            itemsPerPage={pagination.limit}
+            onPageChange={goToPage}
+            onItemsPerPageChange={changeItemsPerPage}
+            className="border-t"
+          />
         </CardContent>
       </Card>
 

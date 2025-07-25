@@ -87,22 +87,37 @@ export default function DashboardPage() {
   };
 
   const fetchOrders = async () => {
-    const response = await fetch("/api/orders");
-    if (response.ok) {
-      const data = await response.json();
-      setOrders(data);
+    try {
+      const response = await fetch("/api/orders?limit=1000"); // Get more orders for dashboard stats
+      if (response.ok) {
+        const data = await response.json();
+        // Handle both old and new API response formats
+        const ordersArray = Array.isArray(data.orders) ? data.orders : Array.isArray(data) ? data : [];
+        setOrders(ordersArray);
+      } else {
+        console.error("Failed to fetch orders:", response.statusText);
+        setOrders([]); // Set empty array on error
+      }
+    } catch (error) {
+      console.error("Error fetching orders:", error);
+      setOrders([]); // Set empty array on error
     }
   };
 
   const getOrderStats = () => {
+    // Ensure orders is always an array
+    const ordersArray = Array.isArray(orders) ? orders : [];
+    const productsArray = Array.isArray(products) ? products : [];
+    const categoriesArray = Array.isArray(categories) ? categories : [];
+    
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const todayOrders = orders.filter(
+    const todayOrders = ordersArray.filter(
       (order) => new Date(order.created_at) >= today
     );
-    const pendingOrders = orders.filter((order) => order.status === "pending");
-    const totalRevenue = orders
+    const pendingOrders = ordersArray.filter((order) => order.status === "pending");
+    const totalRevenue = ordersArray
       .filter((order) => order.status === "completed")
       .reduce((sum, order) => sum + order.total, 0);
 
@@ -110,8 +125,8 @@ export default function DashboardPage() {
       todayOrders: todayOrders.length,
       pendingOrders: pendingOrders.length,
       totalRevenue,
-      totalProducts: products.length,
-      totalCategories: categories.length,
+      totalProducts: productsArray.length,
+      totalCategories: categoriesArray.length,
     };
   };
 
@@ -239,10 +254,10 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-purple-900">
-              {stats.totalRevenue} DH
+              {(stats.totalRevenue).toFixed(2)} DH
             </div>
             <p className="text-xs text-purple-600 mt-1">
-              Avg: {orders.length > 0 ? Math.round(stats.totalRevenue / orders.filter(o => o.status === 'completed').length || 1) : 0} DH/order
+              Avg: {Array.isArray(orders) && orders.length > 0 ? Math.round(stats.totalRevenue / orders.filter(o => o.status === 'completed').length || 1) : 0} DH/order
             </p>
           </CardContent>
         </Card>
@@ -259,7 +274,7 @@ export default function DashboardPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <RevenueTrendsChart orders={orders} days={14} />
+            <RevenueTrendsChart orders={Array.isArray(orders) ? orders : []} days={14} />
           </CardContent>
         </Card>
 
@@ -272,7 +287,7 @@ export default function DashboardPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <OrderStatusChart orders={orders} />
+            <OrderStatusChart orders={Array.isArray(orders) ? orders : []} />
           </CardContent>
         </Card>
 
@@ -285,7 +300,7 @@ export default function DashboardPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <TopProductsChart orders={orders} limit={8} />
+            <TopProductsChart orders={Array.isArray(orders) ? orders : []} limit={8} />
           </CardContent>
         </Card>
 
@@ -299,10 +314,10 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <CategoryPerformanceChart 
-              orders={orders} 
-              categories={categories} 
-              subcategories={subcategories}
-              products={products}
+              orders={Array.isArray(orders) ? orders : []} 
+              categories={Array.isArray(categories) ? categories : []} 
+              subcategories={Array.isArray(subcategories) ? subcategories : []}
+              products={Array.isArray(products) ? products : []}
             />
           </CardContent>
         </Card>
@@ -344,7 +359,7 @@ export default function DashboardPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <CustomerBehaviorChart orders={orders} type={selectedBehaviorChart} />
+            <CustomerBehaviorChart orders={Array.isArray(orders) ? orders : []} type={selectedBehaviorChart} />
           </CardContent>
         </Card>
       </div>

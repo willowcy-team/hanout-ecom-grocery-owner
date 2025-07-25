@@ -390,22 +390,54 @@ export function useOrdersRealtimeEnhanced(options: UseOrdersRealtimeOptions = {}
   }
 }
 
-// Enhanced hook for orders list with persistent connection
+// Enhanced hook for orders list with persistent connection and pagination
 export function useOrdersRealtimeListEnhanced() {
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 20,
+    totalCount: 0,
+    totalPages: 0,
+    hasNextPage: false,
+    hasPreviousPage: false
+  })
 
-  // Fetch initial orders
-  const fetchOrders = useCallback(async () => {
+  // Fetch orders with pagination
+  const fetchOrders = useCallback(async (page = 1, limit = 20) => {
     setLoading(true)
     try {
-      const response = await fetch('/api/orders')
+      const response = await fetch(`/api/orders?page=${page}&limit=${limit}`)
       if (response.ok) {
         const data = await response.json()
-        setOrders(data)
+        
+        // Ensure we always have an array
+        const ordersArray = Array.isArray(data.orders) 
+          ? data.orders 
+          : Array.isArray(data) 
+          ? data 
+          : []
+        
+        setOrders(ordersArray)
+        
+        if (data.pagination) {
+          setPagination(data.pagination)
+        } else {
+          // If no pagination info, set defaults based on the data
+          setPagination({
+            page: 1,
+            limit: ordersArray.length,
+            totalCount: ordersArray.length,
+            totalPages: 1,
+            hasNextPage: false,
+            hasPreviousPage: false
+          })
+        }
       }
     } catch (error) {
       console.error('Error fetching orders:', error)
+      // Ensure orders is always an array even on error
+      setOrders([])
     } finally {
       setLoading(false)
     }
@@ -413,19 +445,21 @@ export function useOrdersRealtimeListEnhanced() {
 
   // Handle realtime changes
   const handleOrderInsert = useCallback((newOrder: Order) => {
-    setOrders(prev => [newOrder, ...prev])
+    setOrders(prev => Array.isArray(prev) ? [newOrder, ...prev] : [newOrder])
   }, [])
 
   const handleOrderUpdate = useCallback((updatedOrder: Order) => {
     setOrders(prev => 
-      prev.map(order => 
-        order.id === updatedOrder.id ? updatedOrder : order
-      )
+      Array.isArray(prev) 
+        ? prev.map(order => 
+            order.id === updatedOrder.id ? updatedOrder : order
+          )
+        : [updatedOrder]
     )
   }, [])
 
   const handleOrderDelete = useCallback((deletedOrderId: string) => {
-    setOrders(prev => prev.filter(order => order.id !== deletedOrderId))
+    setOrders(prev => Array.isArray(prev) ? prev.filter(order => order.id !== deletedOrderId) : [])
   }, [])
 
   // Handle new order notifications
@@ -463,19 +497,29 @@ export function useOrdersRealtimeListEnhanced() {
     heartbeatInterval: 30000,
   })
 
+  // Pagination functions
+  const goToPage = useCallback((page: number) => {
+    fetchOrders(page, pagination.limit)
+  }, [fetchOrders, pagination.limit])
+
+  const changeItemsPerPage = useCallback((limit: number) => {
+    fetchOrders(1, limit) // Reset to page 1 when changing items per page
+  }, [fetchOrders])
+
   // Initial fetch
   useEffect(() => {
-    fetchOrders()
-  }, [fetchOrders])
+    fetchOrders(pagination.page, pagination.limit)
+  }, []) // Only run once on mount
 
   // Manual refresh function
   const refreshOrders = useCallback(() => {
-    fetchOrders()
-  }, [fetchOrders])
+    fetchOrders(pagination.page, pagination.limit)
+  }, [fetchOrders, pagination.page, pagination.limit])
 
   return {
     orders,
     loading,
+    pagination,
     isConnected,
     connectionStatus,
     reconnectAttempts,
@@ -484,5 +528,7 @@ export function useOrdersRealtimeListEnhanced() {
     refreshOrders,
     manualReconnect,
     setOrders, // For manual updates (like status changes)
+    goToPage,
+    changeItemsPerPage,
   }
 }
