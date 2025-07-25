@@ -76,6 +76,23 @@ export default function ProductsPage() {
 
   const { toast } = useToast();
 
+  // Helper function to reset the product form
+  const resetProductForm = () => {
+    setNewProduct({
+      name: "",
+      price: "",
+      description: "",
+      image: "",
+      category_id: "",
+      subcategory_id: "",
+      stock: "",
+      available: true,
+      featured: false,
+      trending: false,
+      discount: "",
+    });
+  };
+
   useEffect(() => {
     fetchData();
   }, []);
@@ -163,19 +180,7 @@ export default function ProductsPage() {
       if (response.ok) {
         const data = await response.json();
         setProducts((prev) => [...prev, data]);
-        setNewProduct({
-          name: "",
-          price: "",
-          description: "",
-          image: "",
-          category_id: "",
-          subcategory_id: "",
-          stock: "",
-          available: true,
-          featured: false,
-          trending: false,
-          discount: "",
-        });
+        resetProductForm();
         setIsAddingProduct(false);
         toast({
           title: "Product added",
@@ -359,16 +364,47 @@ export default function ProductsPage() {
           <h1 className="text-3xl font-bold text-gray-900">Products Management</h1>
           <p className="text-gray-600">Manage your product inventory</p>
         </div>
-        <Dialog open={isAddingProduct} onOpenChange={setIsAddingProduct}>
+        <Dialog 
+          open={isAddingProduct} 
+          onOpenChange={(open) => {
+            setIsAddingProduct(open);
+            if (!open) {
+              // Reset form when dialog is closed
+              resetProductForm();
+            }
+          }}
+        >
           <DialogTrigger asChild>
-            <Button className="bg-orange-600 hover:bg-orange-700">
+            <Button 
+              className="bg-orange-600 hover:bg-orange-700"
+              onClick={() => {
+                // Reset form when using main Add Product button
+                resetProductForm();
+              }}
+            >
               <Plus className="h-4 w-4 mr-2" />
               Add Product
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-2xl">
             <DialogHeader>
-              <DialogTitle>Add New Product</DialogTitle>
+              <DialogTitle>
+                Add New Product
+                {(newProduct.category_id || newProduct.subcategory_id) && (
+                  <span className="text-sm font-normal text-orange-600 ml-2">
+                    → {(() => {
+                      if (newProduct.subcategory_id) {
+                        const subcategory = subcategories.find(s => s.id === newProduct.subcategory_id);
+                        return subcategory ? `${subcategory.emoji} ${subcategory.name}` : 'Subcategory';
+                      } else if (newProduct.category_id) {
+                        const category = categories.find(c => c.id === newProduct.category_id);
+                        return category ? `${category.emoji} ${category.name}` : 'Category';
+                      }
+                      return '';
+                    })()}
+                  </span>
+                )}
+              </DialogTitle>
             </DialogHeader>
             <div className="space-y-4 max-h-96 overflow-y-auto">
               <div className="grid grid-cols-2 gap-4">
@@ -716,19 +752,52 @@ export default function ProductsPage() {
                 Showing {filteredProducts.length} of{" "}
                 {products.length} products
               </div>
-              {(selectedCategoryFilter || selectedSubcategoryFilter) && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setSelectedCategoryFilter(null);
-                    setSelectedSubcategoryFilter(null);
-                  }}
-                  className="text-orange-600 hover:text-orange-700 hover:bg-orange-100"
-                >
-                  Clear Filters
-                </Button>
-              )}
+              <div className="flex items-center space-x-2">
+                {(selectedCategoryFilter || selectedSubcategoryFilter) && categories.length > 0 && subcategories.length > 0 && (
+                  <>
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={() => {
+                        // Reset form first
+                        resetProductForm();
+                        
+                        // Pre-fill the form with selected category/subcategory
+                        setNewProduct(prev => ({
+                          ...prev,
+                          category_id: selectedCategoryFilter || "",
+                          subcategory_id: selectedSubcategoryFilter || "",
+                        }));
+                        setIsAddingProduct(true);
+                      }}
+                      className="bg-orange-600 hover:bg-orange-700 text-white"
+                    >
+                      <Plus className="h-4 w-4 mr-1" />
+                      Add to {(() => {
+                        if (selectedSubcategoryFilter) {
+                          const subcategory = subcategories.find(s => s.id === selectedSubcategoryFilter);
+                          return subcategory ? `${subcategory.emoji} ${subcategory.name}` : 'Subcategory';
+                        } else if (selectedCategoryFilter) {
+                          const category = categories.find(c => c.id === selectedCategoryFilter);
+                          return category ? `${category.emoji} ${category.name}` : 'Category';
+                        }
+                        return 'Category';
+                      })()}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedCategoryFilter(null);
+                        setSelectedSubcategoryFilter(null);
+                      }}
+                      className="text-orange-600 hover:text-orange-700 hover:bg-orange-100"
+                    >
+                      Clear Filters
+                    </Button>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </CardContent>
