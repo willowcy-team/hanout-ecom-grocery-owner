@@ -4,6 +4,9 @@ import "./globals.css";
 import Sidebar from "@/components/layouts/sidebar";
 import { Toaster } from "@/components/ui/toaster";
 import { OrdersProvider } from "@/contexts/orders-context";
+import { SidebarProvider } from "@/contexts/sidebar-context";
+import { NotificationProvider } from "@/contexts/notification-context";
+import { NotificationBanner } from "@/components/ui/notification-banner";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -21,12 +24,19 @@ export default function RootLayout({
     <html lang="en">
       <body className={inter.className}>
         <OrdersProvider>
-          <div className="flex h-screen bg-gray-50">
-            <Sidebar />
-            <main className="flex-1 lg:ml-0 ml-0 overflow-y-auto">
-              {children}
-            </main>
-          </div>
+          <SidebarProvider>
+            <NotificationProvider>
+              <div className="flex h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+                <Sidebar />
+                <main className="flex-1 overflow-y-auto">
+                  <div className="pt-16 lg:pt-0 h-full">
+                    {children}
+                  </div>
+                </main>
+              </div>
+              <NotificationBanner />
+            </NotificationProvider>
+          </SidebarProvider>
         </OrdersProvider>
         <Toaster />
       </body>

@@ -428,6 +428,22 @@ export function useOrdersRealtimeListEnhanced() {
     setOrders(prev => prev.filter(order => order.id !== deletedOrderId))
   }, [])
 
+  // Handle new order notifications
+  const handleOrderInsertWithNotification = useCallback((newOrder: Order) => {
+    handleOrderInsert(newOrder)
+    
+    // Trigger notification for new pending orders
+    if (newOrder.status === 'pending') {
+      // Dispatch custom event for notification system
+      if (typeof window !== 'undefined') {
+        const event = new CustomEvent('newOrders', { 
+          detail: { count: 1, order: newOrder } 
+        })
+        window.dispatchEvent(event)
+      }
+    }
+  }, [handleOrderInsert])
+
   // Set up enhanced realtime subscription
   const { 
     isConnected, 
@@ -437,11 +453,11 @@ export function useOrdersRealtimeListEnhanced() {
     lastHeartbeat,
     manualReconnect 
   } = useOrdersRealtimeEnhanced({
-    onOrderInsert: handleOrderInsert,
+    onOrderInsert: handleOrderInsertWithNotification,
     onOrderUpdate: handleOrderUpdate,
     onOrderDelete: handleOrderDelete,
-    enableNotifications: true,
-    enableSounds: true,
+    enableNotifications: false, // Disable built-in notifications - using NotificationProvider
+    enableSounds: false, // Disable built-in sounds - using NotificationProvider
     reconnectInterval: 3000,
     maxReconnectAttempts: 10,
     heartbeatInterval: 30000,

@@ -8,83 +8,76 @@ interface UseNotificationSoundOptions {
 }
 
 export function useNotificationSound(options: UseNotificationSoundOptions = {}) {
-  const { enabled = true, volume = 0.5 } = options
-  const audioContextRef = useRef<AudioContext | null>(null)
+  const { enabled = true, volume = 0.7 } = options
+  const audioRef = useRef<HTMLAudioElement | null>(null)
 
-  // Initialize audio context on first use
-  const initAudioContext = useCallback(() => {
-    if (!audioContextRef.current && typeof window !== 'undefined') {
+  // Initialize or update audio element
+  const getAudio = useCallback(() => {
+    if (typeof window === 'undefined') return null
+    
+    if (!audioRef.current) {
       try {
-        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)()
+        const audio = new Audio('/audio/level-up.mp3')
+        audio.preload = 'auto'
+        audioRef.current = audio
       } catch (error) {
-        console.warn('AudioContext not supported:', error)
+        console.warn('Audio not supported:', error)
+        return null
       }
     }
-    return audioContextRef.current
-  }, [])
+    
+    // Always update volume
+    if (audioRef.current) {
+      audioRef.current.volume = volume
+    }
+    
+    return audioRef.current
+  }, [volume])
 
-  // Create a simple notification beep using Web Audio API
-  const playNotificationBeep = useCallback((frequency = 800, duration = 200) => {
+  // Play the level-up.mp3 sound
+  const playLevelUpSound = useCallback(() => {
     if (!enabled) return
 
-    const audioContext = initAudioContext()
-    if (!audioContext) return
+    const audio = getAudio()
+    if (!audio) return
 
     try {
-      // Create oscillator for the beep sound
-      const oscillator = audioContext.createOscillator()
-      const gainNode = audioContext.createGain()
-
-      // Connect nodes
-      oscillator.connect(gainNode)
-      gainNode.connect(audioContext.destination)
-
-      // Configure the sound
-      oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime)
-      oscillator.type = 'sine'
-
-      // Create envelope for smooth sound
-      gainNode.gain.setValueAtTime(0, audioContext.currentTime)
-      gainNode.gain.linearRampToValueAtTime(volume, audioContext.currentTime + 0.01)
-      gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + duration / 1000)
-
-      // Play the sound
-      oscillator.start(audioContext.currentTime)
-      oscillator.stop(audioContext.currentTime + duration / 1000)
+      // Reset to beginning and play
+      audio.currentTime = 0
+      const playPromise = audio.play()
+      
+      if (playPromise !== undefined) {
+        playPromise.catch(error => {
+          console.warn('Could not play notification sound:', error)
+        })
+      }
     } catch (error) {
       console.warn('Error playing notification sound:', error)
     }
-  }, [enabled, volume, initAudioContext])
+  }, [enabled, getAudio])
 
-  // Play a pleasant two-tone notification (like iPhone notification)
+  // Use level-up sound for all notification types
   const playOrderNotification = useCallback(() => {
-    if (!enabled) return
+    playLevelUpSound()
+  }, [playLevelUpSound])
 
-    // Play first tone
-    playNotificationBeep(880, 150)
-    
-    // Play second tone after a short delay
-    setTimeout(() => {
-      playNotificationBeep(660, 150)
-    }, 160)
-  }, [enabled, playNotificationBeep])
-
-  // Play a simple success sound
   const playSuccessSound = useCallback(() => {
-    if (!enabled) return
-    playNotificationBeep(1000, 100)
-  }, [enabled, playNotificationBeep])
+    playLevelUpSound()
+  }, [playLevelUpSound])
 
-  // Play a warning sound
   const playWarningSound = useCallback(() => {
-    if (!enabled) return
-    playNotificationBeep(400, 300)
-  }, [enabled, playNotificationBeep])
+    playLevelUpSound()
+  }, [playLevelUpSound])
+
+  const playNotificationBeep = useCallback(() => {
+    playLevelUpSound()
+  }, [playLevelUpSound])
 
   return {
     playOrderNotification,
     playSuccessSound,
     playWarningSound,
     playNotificationBeep,
+    playLevelUpSound,
   }
 }

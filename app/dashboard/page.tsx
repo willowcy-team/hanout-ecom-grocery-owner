@@ -301,7 +301,8 @@ export default function DashboardPage() {
             <CategoryPerformanceChart 
               orders={orders} 
               categories={categories} 
-              subcategories={subcategories} 
+              subcategories={subcategories}
+              products={products}
             />
           </CardContent>
         </Card>

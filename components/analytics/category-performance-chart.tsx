@@ -26,94 +26,151 @@ interface CategoryPerformanceChartProps {
   orders: Order[];
   categories: Category[];
   subcategories: SubCategory[];
+  products: Product[];
+}
+
+interface Product {
+  id: string;
+  name: string;
+  category_id: string;
+  subcategory_id: string;
+  price: number;
 }
 
 export default function CategoryPerformanceChart({ 
   orders, 
   categories, 
-  subcategories 
+  subcategories,
+  products 
 }: CategoryPerformanceChartProps) {
-  const prepareData = () => {
+  // Calculate the data outside so it's available for tooltips
+  const calculateCategoryData = () => {
+    // Create a map of product ID to category for quick lookups
+    const productToCategoryMap = new Map<string, string>();
+    products.forEach(product => {
+      productToCategoryMap.set(product.id, product.category_id);
+    });
+
     // Calculate category performance metrics
     const categoryStats = categories.map(category => {
-      const categorySubcategories = subcategories.filter(sub => sub.category_id === category.id);
+      // Get products in this category
+      const categoryProducts = products.filter(product => product.category_id === category.id);
+      const categoryProductIds = new Set(categoryProducts.map(p => p.id));
       
-      // Get all orders containing products from this category
-      const categoryOrders = orders.filter(order => 
-        order.status === 'completed' && 
-        order.items.some(item => {
-          // We'll need to match items by checking if any subcategory matches
-          // For now, we'll use a simplified approach
-          return true; // This would need product data to properly filter
-        })
-      );
+      // Calculate metrics for this category
+      let totalOrders = 0;
+      let totalRevenue = 0;
+      let totalItems = 0;
+      let totalQuantity = 0;
 
-      // Calculate metrics
-      const totalOrders = categoryOrders.length;
-      const totalRevenue = categoryOrders.reduce((sum, order) => sum + order.total, 0);
-      const totalItems = categoryOrders.reduce((sum, order) => 
-        sum + order.items.reduce((itemSum, item) => itemSum + item.quantity, 0), 0
-      );
+      // Process completed orders
+      const completedOrders = orders.filter(order => order.status === 'completed');
       
-      // Normalize metrics (0-100 scale)
-      const maxOrders = Math.max(...categories.map(c => categoryOrders.length), 1);
-      const maxRevenue = Math.max(...categories.map(c => totalRevenue), 1);
-      const maxItems = Math.max(...categories.map(c => totalItems), 1);
+      completedOrders.forEach(order => {
+        let hasProductFromCategory = false;
+        let orderCategoryRevenue = 0;
+        let orderCategoryItems = 0;
+        let orderCategoryQuantity = 0;
+
+        order.items.forEach(item => {
+          // Check if this item belongs to the current category
+          if (categoryProductIds.has(item.id)) {
+            hasProductFromCategory = true;
+            orderCategoryRevenue += item.price * item.quantity;
+            orderCategoryItems += 1;
+            orderCategoryQuantity += item.quantity;
+          }
+        });
+
+        if (hasProductFromCategory) {
+          totalOrders += 1;
+          totalRevenue += orderCategoryRevenue;
+          totalItems += orderCategoryItems;
+          totalQuantity += orderCategoryQuantity;
+        }
+      });
       
       return {
         name: category.name,
         emoji: category.emoji,
-        orders: (totalOrders / maxOrders) * 100,
-        revenue: (totalRevenue / maxRevenue) * 100,
-        items: (totalItems / maxItems) * 100,
-        subcategoryCount: categorySubcategories.length,
-        popularity: Math.min((totalOrders / Math.max(orders.length, 1)) * 500, 100) // Popularity score
+        orders: totalOrders,
+        revenue: totalRevenue,
+        items: totalItems,
+        quantity: totalQuantity,
+        subcategoryCount: subcategories.filter(sub => sub.category_id === category.id).length,
+        productCount: categoryProducts.length
       };
     });
 
+    // Filter out categories with no sales and get top performing ones
+    const activeCategoryStats = categoryStats.filter(stat => stat.revenue > 0);
+    
+    if (activeCategoryStats.length === 0) {
+      return {
+        labels: ['No Sales Data'],
+        datasets: []
+      };
+    }
+
+    // Calculate max values for normalization
+    const maxOrders = Math.max(...activeCategoryStats.map(cat => cat.orders));
+    const maxRevenue = Math.max(...activeCategoryStats.map(cat => cat.revenue));
+    const maxQuantity = Math.max(...activeCategoryStats.map(cat => cat.quantity));
+
+    // Normalize to 0-100 scale and sort by revenue
+    const normalizedStats = activeCategoryStats.map(cat => ({
+      ...cat,
+      normalizedOrders: maxOrders > 0 ? (cat.orders / maxOrders) * 100 : 0,
+      normalizedRevenue: maxRevenue > 0 ? (cat.revenue / maxRevenue) * 100 : 0,
+      normalizedQuantity: maxQuantity > 0 ? (cat.quantity / maxQuantity) * 100 : 0,
+    })).sort((a, b) => b.revenue - a.revenue);
+
     // Get top 6 categories for better visualization
-    const topCategories = categoryStats
-      .sort((a, b) => b.revenue - a.revenue)
-      .slice(0, 6);
+    const topCategories = normalizedStats.slice(0, 6);
 
     const labels = topCategories.map(cat => `${cat.emoji} ${cat.name}`);
 
     return {
-      labels,
-      datasets: [
-        {
-          label: 'Order Volume',
-          data: topCategories.map(cat => cat.orders),
-          borderColor: 'rgba(234, 88, 12, 0.8)',
-          backgroundColor: 'rgba(234, 88, 12, 0.2)',
-          pointBackgroundColor: 'rgba(234, 88, 12, 1)',
-          pointBorderColor: '#fff',
-          pointHoverBackgroundColor: '#fff',
-          pointHoverBorderColor: 'rgba(234, 88, 12, 1)',
-        },
-        {
-          label: 'Revenue Performance',
-          data: topCategories.map(cat => cat.revenue),
-          borderColor: 'rgba(59, 130, 246, 0.8)',
-          backgroundColor: 'rgba(59, 130, 246, 0.2)',
-          pointBackgroundColor: 'rgba(59, 130, 246, 1)',
-          pointBorderColor: '#fff',
-          pointHoverBackgroundColor: '#fff',
-          pointHoverBorderColor: 'rgba(59, 130, 246, 1)',
-        },
-        {
-          label: 'Item Sales',
-          data: topCategories.map(cat => cat.items),
-          borderColor: 'rgba(16, 185, 129, 0.8)',
-          backgroundColor: 'rgba(16, 185, 129, 0.2)',
-          pointBackgroundColor: 'rgba(16, 185, 129, 1)',
-          pointBorderColor: '#fff',
-          pointHoverBackgroundColor: '#fff',
-          pointHoverBorderColor: 'rgba(16, 185, 129, 1)',
-        }
-      ]
+      topCategories,
+      chartData: {
+        labels,
+        datasets: [
+          {
+            label: 'Order Volume',
+            data: topCategories.map(cat => cat.normalizedOrders),
+            borderColor: 'rgba(234, 88, 12, 0.8)',
+            backgroundColor: 'rgba(234, 88, 12, 0.2)',
+            pointBackgroundColor: 'rgba(234, 88, 12, 1)',
+            pointBorderColor: '#fff',
+            pointHoverBackgroundColor: '#fff',
+            pointHoverBorderColor: 'rgba(234, 88, 12, 1)',
+          },
+          {
+            label: 'Revenue Performance',
+            data: topCategories.map(cat => cat.normalizedRevenue),
+            borderColor: 'rgba(59, 130, 246, 0.8)',
+            backgroundColor: 'rgba(59, 130, 246, 0.2)',
+            pointBackgroundColor: 'rgba(59, 130, 246, 1)',
+            pointBorderColor: '#fff',
+            pointHoverBackgroundColor: '#fff',
+            pointHoverBorderColor: 'rgba(59, 130, 246, 1)',
+          },
+          {
+            label: 'Quantity Sold',
+            data: topCategories.map(cat => cat.normalizedQuantity),
+            borderColor: 'rgba(16, 185, 129, 0.8)',
+            backgroundColor: 'rgba(16, 185, 129, 0.2)',
+            pointBackgroundColor: 'rgba(16, 185, 129, 1)',
+            pointBorderColor: '#fff',
+            pointHoverBackgroundColor: '#fff',
+            pointHoverBorderColor: 'rgba(16, 185, 129, 1)',
+          }
+        ]
+      }
     };
   };
+
+  const { topCategories, chartData } = calculateCategoryData();
 
   const options: ChartOptions<'radar'> = {
     responsive: true,
@@ -135,7 +192,21 @@ export default function CategoryPerformanceChart({
           label: function(context) {
             const label = context.dataset.label || '';
             const value = Math.round(context.parsed.r);
-            return `${label}: ${value}%`;
+            const categoryIndex = context.dataIndex;
+            const categoryData = topCategories[categoryIndex];
+            
+            if (!categoryData) return `${label}: ${value}%`;
+            
+            let actualValue = '';
+            if (label === 'Order Volume') {
+              actualValue = `${categoryData.orders} orders`;
+            } else if (label === 'Revenue Performance') {
+              actualValue = `${categoryData.revenue.toFixed(2)} DH`;
+            } else if (label === 'Quantity Sold') {
+              actualValue = `${categoryData.quantity} items`;
+            }
+            
+            return `${label}: ${value}% (${actualValue})`;
           }
         }
       }
@@ -171,14 +242,23 @@ export default function CategoryPerformanceChart({
     }
   };
 
-  const data = prepareData();
-
-  if (categories.length === 0) {
+  if (categories.length === 0 || products.length === 0) {
     return (
       <div className="h-80 w-full flex items-center justify-center">
         <div className="text-center text-gray-500">
           <div className="text-lg font-medium">No category data available</div>
-          <div className="text-sm">Create categories to see performance analysis</div>
+          <div className="text-sm">Create categories and products to see performance analysis</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (chartData.datasets.length === 0) {
+    return (
+      <div className="h-80 w-full flex items-center justify-center">
+        <div className="text-center text-gray-500">
+          <div className="text-lg font-medium">No sales data available</div>
+          <div className="text-sm">Complete some orders to see category performance</div>
         </div>
       </div>
     );
@@ -186,7 +266,7 @@ export default function CategoryPerformanceChart({
 
   return (
     <div className="h-80 w-full">
-      <Radar data={data} options={options} />
+      <Radar data={chartData} options={options} />
     </div>
   );
 }
